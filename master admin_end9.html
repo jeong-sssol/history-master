@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>히스토리 마스터: 마스터 제어 센터 V14</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+    <style>
+        :root { --pk-green: #4DAD5B; --pk-blue: #3A83F6; --pk-red: #EE5253; --pk-yellow: #FFC312; --pk-dark: #2f3640; --pk-gray: #dcdde1; }
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 20px; font-family: 'Noto Sans KR', sans-serif; color: var(--pk-dark); background: linear-gradient(rgba(240, 244, 248, 0.75), rgba(240, 244, 248, 0.75)), url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1964&auto=format&fit=crop'); background-size: cover; background-position: center; background-attachment: fixed; min-height: 100vh; display: flex; flex-direction: column; align-items: center; }
+        .hidden { display: none !important; }
+        .container { width: 95vw; max-width: 1400px; background: rgba(255,255,255,0.96); border-radius: 20px; padding: 25px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); border: 4px solid var(--pk-blue); }
+        .lock-screen { text-align: center; padding: 50px 20px; }
+        .lock-screen input { width: 250px; padding: 12px; font-size: 18px; text-align: center; border: 2px solid var(--pk-gray); border-radius: 8px; margin-bottom: 15px; }
+        .setup-box { background: #fff; border: 2px solid var(--pk-gray); border-radius: 15px; padding: 25px; margin-bottom: 20px; }
+        .setup-box h3 { margin-top: 0; color: var(--pk-blue); border-bottom: 2px dashed #ccc; padding-bottom: 10px; font-size: 22px; font-weight: 900; }
+        .input-group { margin-bottom: 15px; }
+        .input-group label { display: block; font-weight: bold; margin-bottom: 5px; color: #555; }
+        .input-group input, .input-group select { width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px; }
+        .btn { font-family: 'Noto Sans KR', sans-serif; font-weight: 900; font-size: 16px; padding: 12px 22px; border: none; border-radius: 10px; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .btn:active { transform: scale(0.98); }
+        .btn-full { width: 100%; font-size: 24px; background: var(--pk-blue); color: white; margin-top: 10px; padding: 15px; }
+        .header-section { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #eee; padding-bottom: 20px; }
+        .timer-box { background: #fff; color: var(--pk-red); display: inline-block; padding: 5px 35px; border-radius: 15px; border: 4px solid var(--pk-red); font-size: 65px; font-weight: 900; letter-spacing: 2px; }
+        .control-btns { margin-top: 15px; display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+        .btn-start { background: var(--pk-green); color: white; }
+        .btn-stop { background: var(--pk-dark); color: white; }
+        .btn-modify { background: #4b5563; color: white; }
+        .btn-save { background: var(--pk-blue); color: white; }
+        .btn-report { background: #107C41; color: white; }
+        .btn-excel-all { background: var(--pk-yellow); color: var(--pk-dark); }
+        .btn-reset { background: var(--pk-red); color: white; }
+        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+        .gym-card { background: #fff; border: 2px solid #e1e8ef; border-radius: 16px; padding: 15px 20px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 6px 12px rgba(0,0,0,0.04); }
+        .card-top { display: flex; align-items: center; justify-content: space-between; }
+        .name-area { display: flex; align-items: center; gap: 12px; flex-grow: 1; }
+        .poke-icon { width: 75px; height: 75px; object-fit: contain; }
+        .name-area h3 { margin: 0; font-size: 22px; font-weight: 900; color: var(--pk-dark); word-break: keep-all; }
+        .score-badge { color: var(--pk-blue); font-size: 45px; font-weight: 900; text-align: right; min-width: 80px; }
+        .score-badge.negative { color: var(--pk-red); } 
+        .card-bottom { display: flex; align-items: center; gap: 12px; margin-top: 2px; }
+        .track { background: #f1f2f6; height: 10px; border-radius: 10px; overflow: hidden; flex-grow: 1; }
+        .bar-fill { height: 100%; background: linear-gradient(90deg, #7bed9f, #2ed573); border-radius: 10px; transition: width 0.5s ease; }
+        .progress-text { margin: 0; font-size: 13px; font-weight: bold; color: #a4b0be; white-space: nowrap; }
+        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 100; opacity: 0; pointer-events: none; transition: 0.3s; padding: 20px;}
+        .modal.open { opacity: 1; pointer-events: auto; }
+        .modal-content { background: white; width: 100%; max-width: 500px; border-radius: 20px; padding: 25px; transform: translateY(20px); transition: 0.3s; position: relative; max-height: 90vh; overflow-y: auto;}
+        .modal.open .modal-content { transform: translateY(0); }
+        .close-modal { position: absolute; top: 15px; right: 20px; background: none; border: none; font-size: 28px; cursor: pointer; color: #bbb; font-weight: bold; }
+        .report-list { display: flex; flex-direction: column; gap: 10px; margin-top: 15px; }
+        .report-item { background: #f8f9fa; border: 1px solid #ddd; border-radius: 10px; padding: 15px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: 0.2s; }
+        .report-item:hover { background: #eef2ff; border-color: var(--pk-blue); }
+        .report-info h4 { margin: 0 0 5px 0; font-size: 16px; color: var(--pk-dark); }
+        .report-info p { margin: 0; font-size: 13px; color: #888; font-weight: bold; }
+        .result-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .result-table th, .result-table td { padding: 12px; text-align: center; border-bottom: 1px solid #eee; font-size: 15px; }
+        .result-table th { background: #f8f9fa; color: #555; font-weight: bold; }
+        .result-table tr:nth-child(1) td { font-weight: 900; color: var(--pk-red); font-size: 18px; } 
+        .result-table tr:nth-child(2) td { font-weight: 900; color: var(--pk-blue); } 
+    </style>
+</head>
+<body>
+    <div class="container" id="viewLock">
+        <div class="lock-screen">
+            <h2 style="font-size: 28px; margin-bottom: 10px;">🔑 마스터 제어실 접속</h2>
+            <p style="color: #666; margin-bottom: 25px;">교사 전용 마스터 인증 코드를 입력하세요. (암호: history123)</p>
+            <input type="password" id="masterPin" placeholder="인증 비밀번호 입력">
+            <br><button class="btn btn-start" style="width: 250px; padding: 14px;" onclick="verifyMaster()">접속하기</button>
+        </div>
+    </div>
+
+    <div class="container hidden" id="setupScreen">
+        <h1 style="text-align: center; color: var(--pk-dark); font-size: 36px; font-weight: 900; margin-bottom: 25px;">히스토리 마스터: 체육관 배틀 <span style="color: var(--pk-blue);">관리자</span></h1>
+        <div class="setup-box">
+            <h3>⚙️ 배틀 환경 및 규칙 설정</h3>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
+                <div class="input-group"><label>참여 체육관 수</label><input type="number" id="groupCount" value="6" min="2" max="12"></div>
+                <div class="input-group"><label>배틀 제한 시간 (분)</label><input type="number" id="timeLimit" value="7" min="1" max="30"></div>
+                <div class="input-group"><label style="color:var(--pk-red);">체육관당 최대 풀이 가능 문항 수</label><input type="number" id="maxSolvePerGym" value="3" min="1" max="10"></div>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 15px; padding-top: 15px; border-top: 1px dashed #eee;">
+                <div class="input-group" style="background:#fff0f0; padding:15px; border-radius:10px; border:2px solid #ffcccc;"><label style="color: var(--pk-red);">💥 폭탄 배점 (-5 ~ -1)</label><select id="scoreMinusVal"><option value="-5" selected>-5점</option><option value="-4">-4점</option><option value="-3">-3점</option><option value="-2">-2점</option><option value="-1">-1점</option></select><label style="margin-top:10px;">폭탄 문항 수</label><input type="number" id="scoreMinusCount" value="2" min="0"></div>
+                <div class="input-group" style="background:#f0f7ff; padding:15px; border-radius:10px; border:2px solid #cce0ff;"><label style="color: var(--pk-blue);">📘 일반 배점 (1 ~ 5)</label><select id="scorePlus3Val"><option value="1">+1점</option><option value="2">+2점</option><option value="3" selected>+3점</option><option value="4">+4점</option><option value="5">+5점</option></select><label style="margin-top:10px;">일반 문항 수</label><input type="number" id="scorePlus3Count" value="7" min="0"></div>
+                <div class="input-group" style="background:#fffde6; padding:15px; border-radius:10px; border:2px solid #ffebb3;"><label style="color: #d49a00;">🌟 대박 배점 (5 ~ 10)</label><select id="scorePlus5Val"><option value="5" selected>+5점</option><option value="6">+6점</option><option value="7">+7점</option><option value="8">+8점</option><option value="9">+9점</option><option value="10">+10점</option></select><label style="margin-top:10px;">대박 문항 수</label><input type="number" id="scorePlus5Count" value="1" min="0"></div>
+            </div>
+            <div class="input-group" style="margin-top:15px;"><label>각 모둠당 총 출제해야 할 문항 수 (자동 계산)</label><input type="number" id="totalQuestions" value="10" readonly style="background:#eee; font-weight:bold; color:var(--pk-blue);"></div>
+        </div>
+        <button class="btn btn-full" onclick="completeSetup()">설정 완료 및 배틀 전광판 오픈</button>
+    </div>
+
+    <div class="container hidden" id="dashboardScreen">
+        <div class="header-section">
+            <div class="timer-box" id="globalTimer">07:00</div>
+            <div class="control-btns">
+                <button class="btn btn-start" onclick="startTimer()">▶ 배틀 시작</button>
+                <button class="btn btn-stop" onclick="stopBattle()">■ 강제 종료</button>
+                <button class="btn btn-modify" onclick="backToSetup()">🛠️ 설정 수정</button>
+                <button class="btn btn-save" onclick="saveAndResetRound()">💾 라운드 리셋 및 결과저장</button>
+                <button class="btn btn-report" onclick="openReportBoardModal()">📋 배틀 리포트 보관함</button>
+                <button class="btn btn-excel-all" onclick="downloadAllRoundsExcel()">📊 전체 라운드 종합 엑셀</button>
+                <button class="btn btn-reset" onclick="resetClassData()">💥 학급 전면 리셋</button>
+            </div>
+        </div>
+        <p id="emptyMsg" style="text-align:center; color:#888; font-weight:bold; font-size:18px; margin-top:40px; display:none;">⏳ 학생들의 체육관 개설을 기다리는 중입니다...</p>
+        <div class="dashboard-grid" id="gridChart"></div>
+    </div>
+
+    <div id="modalReportBoard" class="modal">
+        <div class="modal-content">
+            <button class="close-modal" onclick="closeModal('modalReportBoard')">&times;</button>
+            <h3 style="margin: 0 0 15px 0; font-size: 22px; font-weight: 900; color: var(--pk-dark); border-bottom: 2px dashed #eee; padding-bottom:10px;">📊 배틀 리포트 보관함</h3>
+            <div class="report-list" id="reportListArea"></div>
+        </div>
+    </div>
+
+    <div id="modalReportDetail" class="modal" style="z-index: 105;">
+        <div class="modal-content">
+            <button class="close-modal" onclick="closeModal('modalReportDetail')">&times;</button>
+            <h3 id="modalReportTitle" style="margin: 0 0 5px 0; font-size: 20px; font-weight: 900; color: var(--pk-blue);">배틀 결과 리포트</h3>
+            <p id="modalReportDate" style="margin: 0 0 20px 0; font-size: 14px; color: #888; font-weight: bold;">저장 일시: -</p>
+            <div style="background: #f8f9fa; border-radius: 12px; border: 2px solid var(--pk-border); overflow: hidden;">
+                <table class="result-table">
+                    <thead><tr><th>순위</th><th>도전자 모둠명</th><th>최종 획득 점수</th></tr></thead>
+                    <tbody id="reportTableBody"></tbody>
+                </table>
+            </div>
+            <div style="margin-top: 20px;">
+                <button class="btn btn-report" id="btnDownloadSingleExcel" style="width:100%; padding:15px; font-size:18px;">📥 이 라운드 상세 엑셀 다운로드</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+          apiKey: "AIzaSyBoenwe9SJGEtGv8iAXKHhL_ZuW9tC9Sy8",
+          authDomain: "history-master-cc32c.firebaseapp.com",
+          databaseURL: "https://history-master-cc32c-default-rtdb.firebaseio.com",
+          projectId: "history-master-cc32c",
+          storageBucket: "history-master-cc32c.firebasestorage.app",
+          messagingSenderId: "651057510611",
+          appId: "1:651057510611:web:69cd05ee6c8ce4c5edfc26"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        let timerInterval; let timeLeft = 0; let currentRound = 1;
+        const pokeSprites = ["133", "39", "175", "151", "25", "7", "4", "1", "94", "143"];
+        let currentGymsData = {}; let allReports = {}; 
+
+        function verifyMaster() {
+            if(document.getElementById('masterPin').value === "history123") {
+                document.getElementById('viewLock').classList.add('hidden');
+                document.getElementById('setupScreen').classList.remove('hidden');
+            } else { alert("비밀번호 오류! (기본 암호: history123)"); }
+        }
+
+        document.querySelectorAll('input[type="number"]').forEach(input => {
+            input.addEventListener('input', () => {
+                if(input.id.includes('Count')) {
+                    const mC = parseInt(document.getElementById('scoreMinusCount').value) || 0;
+                    const p3C = parseInt(document.getElementById('scorePlus3Count').value) || 0;
+                    const p5C = parseInt(document.getElementById('scorePlus5Count').value) || 0;
+                    document.getElementById('totalQuestions').value = mC + p3C + p5C;
+                }
+            });
+        });
+
+        // [★수정] groupCount(체육관 제한 수)를 파이어베이스에 동기화
+        function completeSetup() {
+            const total = parseInt(document.getElementById('totalQuestions').value);
+            if (total <= 0) return alert("총 문항 수가 최소 1개는 되어야 합니다!");
+            document.getElementById('setupScreen').classList.add('hidden');
+            document.getElementById('dashboardScreen').classList.remove('hidden');
+            timeLeft = document.getElementById('timeLimit').value * 60;
+            updateDisplay();
+            db.ref('globalConfig').update({
+                timeLimitMin: parseInt(document.getElementById('timeLimit').value),
+                maxSolvePerGym: parseInt(document.getElementById('maxSolvePerGym').value),
+                groupCount: parseInt(document.getElementById('groupCount').value), // 락 걸기 용도
+                status: 'setup',
+                timestamp: Date.now()
+            });
+            renderFirebaseGrid();
+        }
+
+        function backToSetup() {
+            document.getElementById('dashboardScreen').classList.add('hidden');
+            document.getElementById('setupScreen').classList.remove('hidden');
+            clearInterval(timerInterval); timerInterval = null;
+            db.ref('globalConfig').update({ status: 'setup', timestamp: Date.now() });
+        }
+
+        function startTimer() { 
+            if(timerInterval) return; 
+            db.ref('globalConfig').update({ 
+                status: 'start', 
+                timeLeft: timeLeft,
+                startTimestamp: Date.now() 
+            });
+            timerInterval = setInterval(() => { 
+                if(timeLeft > 0) { timeLeft--; updateDisplay(); } else { stopBattle(); } 
+            }, 1000); 
+        }
+        
+        function stopBattle() { 
+            clearInterval(timerInterval); timerInterval = null; 
+            timeLeft = 0; updateDisplay(); 
+            db.ref('globalConfig').update({ status: 'stop' });
+            alert("제한시간 마감! 전 기기의 조작이 정지됩니다."); 
+        }
+
+        function updateDisplay() {
+            let m = Math.floor(timeLeft / 60).toString().padStart(2, '0'); let s = (timeLeft % 60).toString().padStart(2, '0');
+            document.getElementById('globalTimer').innerText = `${m}:${s}`;
+        }
+
+        db.ref('gyms').on('value', (snapshot) => { currentGymsData = snapshot.val() || {}; if(!document.getElementById('dashboardScreen').classList.contains('hidden')) renderFirebaseGrid(); });
+        
+        db.ref('reports').on('value', (snapshot) => { 
+            allReports = snapshot.val() || {}; 
+            if (document.getElementById('modalReportBoard').classList.contains('open')) openReportBoardModal();
+        });
+
+        function renderFirebaseGrid() {
+            const grid = document.getElementById('gridChart'); grid.innerHTML = ""; 
+            const gymKeys = Object.keys(currentGymsData); const emptyMsg = document.getElementById('emptyMsg');
+            if(gymKeys.length === 0) { emptyMsg.style.display = 'block'; return; } else { emptyMsg.style.display = 'none'; }
+            
+            const groupCount = parseInt(document.getElementById('groupCount').value) || 6; 
+            const maxPerGym = parseInt(document.getElementById('maxSolvePerGym').value) || 3;
+            const maxQuestions = (groupCount - 1) * maxPerGym; 
+
+            let teamStats = {};
+            gymKeys.forEach(g => { teamStats[g] = { score: 0, solved: 0 }; }); 
+
+            gymKeys.forEach(gName => {
+                const gym = currentGymsData[gName];
+                if(gym.requests) {
+                    Object.values(gym.requests).forEach(req => {
+                        if(req.status === 'completed') {
+                            if(!teamStats[req.team]) teamStats[req.team] = { score: 0, solved: 0 };
+                            teamStats[req.team].score += (req.scoreDelta || 0);
+                            teamStats[req.team].solved++;
+                        }
+                    });
+                }
+            });
+
+            Object.keys(teamStats).forEach((teamName, index) => {
+                const stats = teamStats[teamName];
+                let progressPercent = (stats.solved / maxQuestions) * 100; 
+                if(progressPercent > 100) progressPercent = 100;
+
+                const card = document.createElement('div'); card.className = "gym-card";
+                card.innerHTML = `
+                    <div class="card-top">
+                        <div class="name-area">
+                            <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pokeSprites[index % pokeSprites.length]}.png" class="poke-icon">
+                            <h3>${teamName}</h3>
+                        </div>
+                        <div class="score-badge ${stats.score < 0 ? 'negative' : ''}">${stats.score > 0 ? '+'+stats.score : stats.score}</div>
+                    </div>
+                    <div class="card-bottom">
+                        <div class="track"><div class="bar-fill" style="width: ${progressPercent}%;"></div></div>
+                        <p class="progress-text">${stats.solved}/${maxQuestions} 완료</p>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function saveAndResetRound() {
+            if(Object.keys(currentGymsData).length === 0) return alert("현재 개설된 체육관 데이터가 없습니다.");
+            
+            const wantReset = confirm("라운드를 종료하고 리셋하시겠습니까?\n(다음 라운드를 위해 아이들의 점수와 풀이 기록이 0으로 초기화됩니다.)");
+            if(!wantReset) return;
+
+            const wantSave = confirm("이번 라운드의 배틀 결과를 '리포트 보관함'에 저장하시겠습니까?\n\n[확인] = 리포트 저장 후 리셋 진행\n[취소] = 저장하지 않고 쿨하게 리셋 (실수/테스트용)");
+
+            if(wantSave) {
+                let teamScores = {}; Object.keys(currentGymsData).forEach(gName => { teamScores[gName] = 0; });
+                Object.values(currentGymsData).forEach(gym => {
+                    if(gym.requests) { Object.values(gym.requests).forEach(req => { if(req.status === 'completed') { if(teamScores[req.team] === undefined) teamScores[req.team] = 0; teamScores[req.team] += (req.scoreDelta || 0); } }); }
+                });
+
+                let gymDetailedStats = {};
+                Object.keys(currentGymsData).forEach(gName => {
+                    const gym = currentGymsData[gName]; gymDetailedStats[gName] = [];
+                    if(gym.questions) {
+                        gym.questions.forEach((q, qIdx) => {
+                            if(!q) return; let attempts = 0; let corrects = 0;
+                            if(gym.requests) { Object.values(gym.requests).forEach(req => { if(req.status === 'completed' && req.qIdx === qIdx) { attempts++; if(req.isCorrect) corrects++; } }); }
+                            let accStr = attempts === 0 ? "0%" : Math.round((corrects / attempts) * 100) + "%";
+                            gymDetailedStats[gName].push({ qNum: `Q${qIdx + 1}`, score: q.score > 0 ? `+${q.score}` : `${q.score}`, text: q.text, answer: q.answer, subQ: q.sub ? q.sub.q : "-", subA: q.sub ? q.sub.a : "-", attempts: attempts, corrects: corrects, accuracy: accStr });
+                        });
+                    }
+                });
+
+                const now = new Date(); const dateString = `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+                const customTitle = prompt("리포트 제목을 적어주세요.", `${currentRound}라운드 배틀 결과`);
+                if(!customTitle) return; 
+
+                const reportData = { roundIndex: currentRound, title: customTitle, dateString: dateString, timestamp: firebase.database.ServerValue.TIMESTAMP, scores: teamScores, gymStats: gymDetailedStats };
+                
+                db.ref('reports').push(reportData).then(() => {
+                    alert("✅ 리포트가 성공적으로 저장되었습니다!");
+                    executeResetOnly();
+                });
+            } else {
+                executeResetOnly();
+            }
+        }
+
+        function executeResetOnly() {
+            let updates = {};
+            Object.keys(currentGymsData).forEach(gName => { updates['gyms/' + gName + '/requests'] = null; updates['gyms/' + gName + '/status'] = 'setup'; });
+            updates['globalConfig/status'] = 'setup'; 
+            updates['globalConfig/roundResetTrigger'] = Date.now();
+            
+            db.ref().update(updates).then(() => {
+                alert("✅ 라운드 리셋 완료! 관장 패드의 잠금이 해제되었습니다.");
+                currentRound++; clearInterval(timerInterval); timerInterval = null; timeLeft = document.getElementById('timeLimit').value * 60; updateDisplay();
+            });
+        }
+
+        function deleteReport(reportKey) {
+            if(confirm("정말로 이 리포트를 삭제하시겠습니까? (복구할 수 없습니다)")) { db.ref('reports/' + reportKey).remove(); }
+        }
+
+        function openReportBoardModal() {
+            const listArea = document.getElementById('reportListArea'); listArea.innerHTML = '';
+            const reportKeys = Object.keys(allReports).reverse(); 
+            if(reportKeys.length === 0) { listArea.innerHTML = '<p style="text-align:center; color:#aaa; font-weight:bold; padding:20px 0;">아직 저장된 리포트가 없습니다.</p>'; } 
+            else {
+                reportKeys.forEach(key => {
+                    const rep = allReports[key]; const item = document.createElement('div'); item.className = 'report-item'; item.onclick = () => openReportDetailModal(key);
+                    const teamCount = Object.keys(rep.scores).length;
+                    item.innerHTML = `<div class="report-info"><h4>${rep.title}</h4><p>참가 모둠: ${teamCount}팀 | 저장: ${rep.dateString}</p></div><div style="display:flex; gap:8px;"><button class="btn btn-red" style="padding:6px 12px; font-size:13px;" onclick="event.stopPropagation(); deleteReport('${key}')">🗑️ 삭제</button><div style="background:var(--pk-blue); color:white; padding:6px 12px; border-radius:6px; font-weight:bold; font-size:13px;">결과 보기</div></div>`;
+                    listArea.appendChild(item);
+                });
+            }
+            document.getElementById('modalReportBoard').classList.add('open');
+        }
+
+        function openReportDetailModal(reportKey) {
+            const rep = allReports[reportKey]; if(!rep) return;
+            document.getElementById('modalReportTitle').innerText = rep.title; document.getElementById('modalReportDate').innerText = `저장 일시: ${rep.dateString}`;
+            const scoreArray = Object.keys(rep.scores).map(t => ({ team: t, score: rep.scores[t] })); scoreArray.sort((a, b) => b.score - a.score);
+            const tbody = document.getElementById('reportTableBody'); tbody.innerHTML = '';
+            scoreArray.forEach((item, index) => {
+                let rankStr = `${index + 1}위`; if(index === 0) rankStr = `🥇 1위`; if(index === 1) rankStr = `🥈 2위`; if(index === 2) rankStr = `🥉 3위`;
+                const tr = document.createElement('tr'); tr.innerHTML = `<td>${rankStr}</td><td style="font-weight:bold;">${item.team}</td><td>${item.score > 0 ? '+' + item.score : item.score}점</td>`; tbody.appendChild(tr);
+            });
+            const btnExcel = document.getElementById('btnDownloadSingleExcel'); btnExcel.onclick = () => downloadSingleExcel(rep);
+            document.getElementById('modalReportDetail').classList.add('open');
+        }
+
+        function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+        function downloadSingleExcel(repData) {
+            const wb = XLSX.utils.book_new();
+            const scoreArray = Object.keys(repData.scores).map((t, idx) => ({ "순위": "", "모둠명": t, "최종 획득 점수": repData.scores[t] }));
+            scoreArray.sort((a, b) => b["최종 획득 점수"] - a["최종 획득 점수"]); scoreArray.forEach((item, idx) => item["순위"] = `${idx + 1}위`);
+            const wsRank = XLSX.utils.json_to_sheet(scoreArray); XLSX.utils.book_append_sheet(wb, wsRank, "종합 순위");
+            let detailData = [];
+            if(repData.gymStats) {
+                Object.keys(repData.gymStats).forEach(gName => { repData.gymStats[gName].forEach(q => { detailData.push({ "체육관명": gName, "문항 번호": q.qNum, "배점": q.score, "본 문제 내용": q.text, "본 문제 정답": q.answer, "연계 방어 문제": q.subQ, "연계 방어 정답": q.subA, "도전 횟수": q.attempts + "회", "정답 횟수": q.corrects + "회", "정답률": q.accuracy }); }); });
+            }
+            const wsDetail = XLSX.utils.json_to_sheet(detailData); XLSX.utils.book_append_sheet(wb, wsDetail, "문항 상세 분석");
+            const safeTitle = repData.title.replace(/[^a-z0-9가-힣]/gi, '_'); XLSX.writeFile(wb, `${safeTitle}_리포트.xlsx`);
+        }
+
+        function downloadAllRoundsExcel() {
+            const reportKeys = Object.keys(allReports); if(reportKeys.length === 0) return alert("보관함에 저장된 데이터가 없습니다.");
+            const wb = XLSX.utils.book_new();
+            let masterScoreBoard = {};
+            reportKeys.forEach(key => { const rep = allReports[key]; Object.keys(rep.scores).forEach(team => { if(!masterScoreBoard[team]) masterScoreBoard[team] = 0; masterScoreBoard[team] += rep.scores[team]; }); });
+            let finalSummaryArray = Object.keys(masterScoreBoard).map((team, idx) => ({ "누적 순위": "", "모둠명": team, "누적 총점": masterScoreBoard[team] + "점" }));
+            finalSummaryArray.sort((a,b) => parseInt(b["누적 총점"]) - parseInt(a["누적 총점"])); finalSummaryArray.forEach((item, idx) => item["누적 순위"] = `${idx+1}위`);
+            const wsTotal = XLSX.utils.json_to_sheet(finalSummaryArray); XLSX.utils.book_append_sheet(wb, wsTotal, "🌟 누적 종합 순위");
+            reportKeys.forEach((key) => {
+                const rep = allReports[key]; const roundNum = rep.roundIndex || 1; let roundRows = [];
+                roundRows.push({ A: `🏆 [${roundNum}라운드 모둠별 순위표]`, B: "", C: "" }); roundRows.push({ A: "순위", B: "모둠명", C: "획득 점수" });
+                const rScoreArr = Object.keys(rep.scores).map(t => ({ team: t, score: rep.scores[t] })).sort((a,b)=>b.score-a.score);
+                rScoreArr.forEach((item, idx) => { roundRows.push({ A: `${idx+1}위`, B: item.team, C: item.score + "점" }); });
+                roundRows.push({ A: "", B: "", C: "" }); roundRows.push({ A: "📝 [체육관별 문제 출제 및 정답률 분석]", B: "", C: "" }); roundRows.push({ A: "체육관명", B: "문항", C: "배점", D: "문제 내용", E: "정답", F: "연계 질문", G: "연계 정답", H: "도전 횟수", I: "정답률" });
+                if(rep.gymStats) { Object.keys(rep.gymStats).forEach(gName => { rep.gymStats[gName].forEach(q => { roundRows.push({ A: gName, B: q.qNum, C: q.score, D: q.text, E: q.answer, F: q.subQ, G: q.subA, H: q.attempts + "회", I: q.accuracy }); }); }); }
+                const wsRound = XLSX.utils.json_to_sheet(roundRows, { skipHeader: true }); XLSX.utils.book_append_sheet(wb, wsRound, `${roundNum}라운드 결과`);
+            });
+            const now = new Date(); XLSX.writeFile(wb, `역사배틀_전체라운드_종합마스터_${now.getMonth()+1}월${now.getDate()}일.xlsx`);
+        }
+
+        function resetClassData() {
+            const pwd = prompt("🚨 [학급 전면 초기화]\n모든 체육관과 문제를 삭제하고 처음 로그인 화면으로 내쫓습니다.\n계속하시려면 '초기화' 라고 입력하세요.");
+            if(pwd === "초기화") {
+                db.ref('globalConfig').update({ status: 'reset', classResetTrigger: Date.now() });
+                db.ref('gyms').remove().then(() => {
+                    alert("💥 학급 리셋 완료! 교실 내 모든 패드가 첫 화면으로 자동 튕겨 나갔습니다.");
+                    document.getElementById('dashboardScreen').classList.add('hidden');
+                    document.getElementById('setupScreen').classList.remove('hidden');
+                    clearInterval(timerInterval); timerInterval = null;
+                });
+            }
+        }
+    </script>
+</body>
+</html>
