@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>히스토리 마스터: 체육관 V49</title>
+    <title>히스토리 마스터: 체육관 V50</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
@@ -474,6 +474,7 @@
         }
 
         function startGym() {
+            // ★ 수정: 공백 자동 제거로 중복 생성 원천 차단
             const inputName = document.getElementById('inputGymName').value.replace(/\s+/g, ''); 
             const inputCode = document.getElementById('inputGymCode').value;
             
@@ -508,7 +509,9 @@
 
         function listenToQuestions() {
             db.ref('gyms/' + gymName + '/questions').on('value', (snapshot) => {
+                // ★ 내 기기에서 모달창을 열고 있지 않은 경우에만 화면 즉시 갱신 (팀원 동기화)
                 if(isEditing || isScoreAdjustMode) return; 
+                
                 const data = snapshot.val(); let newQuestions = Array(TOTAL_Q).fill(null);
                 if(data) {
                     if(Array.isArray(data)) { data.forEach((q, i) => { if(q) newQuestions[i] = q; }); } 
@@ -516,7 +519,7 @@
                 }
                 if(JSON.stringify(questions) !== JSON.stringify(newQuestions)) {
                     questions = newQuestions; recalcQuotaFromQuestions();
-                    if(!isEditing && !isScoreAdjustMode) { renderBalls(); }
+                    renderBalls(); 
                 }
             });
         }
@@ -689,7 +692,7 @@
             document.getElementById('modalEditor').classList.add('open');
         }
 
-        // ★ 서버 핀포인트 저장 후 즉시 화면 동기화
+        // ★ 모달이 닫힐 때만 화면에 그리도록 하여, 친구가 모달을 안 킨 상태라면 실시간 반영되도록 함.
         function saveQuestion() {
             const text = document.getElementById('editQuestion').value; let finalAns = ""; let mcqOpts = []; let savedImgData = null;
             const previewEl = document.getElementById('imgPreviewElement'); if(previewEl.style.display === 'block') savedImgData = previewEl.src;
@@ -722,7 +725,9 @@
 
             if(tempQuota[scoreStr] <= 0) { alert(`앗! 지정된 ${getScoreStr(score)}점 배점 할당량이 남아있지 않습니다. 다른 배점을 선택해 주세요.`); refreshScoreDropdown(scoreStr, tempQuota); return; }
 
+            // ★ 핀포인트 저장 후 모달 닫기
             db.ref('gyms/' + gymName + '/questions/' + targetIdx).set(newQuestionObj).then(() => { 
+                // 강제 서버 동기화
                 db.ref('gyms/' + gymName + '/questions').once('value').then((snap) => {
                     const data = snap.val(); let newQuestions = Array(TOTAL_Q).fill(null);
                     if(data) {
@@ -730,15 +735,16 @@
                         else { Object.keys(data).forEach(k => { newQuestions[parseInt(k)] = data[k]; }); }
                     }
                     questions = newQuestions; recalcQuotaFromQuestions();
-                    closeModal('modalEditor');
+                    closeModal('modalEditor'); // 닫으면서 renderBalls() 자동 호출됨
                 });
             });
         }
 
+        // ★ 삭제 시에도 서버 즉각 동기화 적용
         function deleteCurrentQuestion() {
             if(isEditingNew) return;
             if(confirm("이 문항을 삭제하시겠습니까?")) {
-                db.ref('gyms/' + gymName + '/questions/' + editingIndex).remove().then(() => {
+                db.ref('gyms/' + gymName + '/questions/' + editingIndex).remove().then(() => { 
                     db.ref('gyms/' + gymName + '/questions').once('value').then((snap) => {
                         const data = snap.val(); let newQuestions = Array(TOTAL_Q).fill(null);
                         if(data) {
@@ -768,6 +774,7 @@
         function selectOx(val) { oxAnswer = val; document.getElementById('oxO').className = `ox-btn ${val==='O'?'active-O':''}`; document.getElementById('oxX').className = `ox-btn ${val==='X'?'active-X':''}`; }
         function toggleDefensePanel() { document.getElementById('subQuestionArea').classList.toggle('hidden'); }
         
+        // ★ 모달을 닫을 때(저장/삭제 포함) 무조건 한 번 화면을 다시 그리도록 보완
         function closeModal(id) { 
             document.getElementById(id).classList.remove('open'); 
             if(id === 'modalEditor') { isEditing = false; renderBalls(); } 
