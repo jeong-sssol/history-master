@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>히스토리 마스터: 마스터 제어 센터 V59</title>
+    <title>히스토리 마스터: 마스터 제어 센터 V60</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
@@ -37,20 +37,15 @@
         .btn-excel-all { background: #f39c12; color: white; }
         .btn-reset { background: var(--pk-red); color: white; }
         
-        /* [★ 카드 사이즈 원상 복구] auto-fill을 사용하여 카드가 화면에 꽉 차게 늘어나는 현상 완벽 방지 */
         .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
         
-        /* [★ 카드 사이즈 원상 복구] 높이 115px 고정으로 일체감 부여 */
         .gym-card { background: #fff; border: 2px solid #e1e8ef; border-radius: 16px; padding: 12px 18px; display: flex; flex-direction: column; justify-content: space-between; height: 115px; box-shadow: 0 6px 12px rgba(0,0,0,0.04); position: relative; transition: all 0.3s ease; }
         .gym-card.ready { border: 3px solid #74b9ff; background: #f4f9ff; box-shadow: 0 6px 15px rgba(58, 131, 246, 0.15); }
 
         .card-top { display: flex; align-items: flex-start; justify-content: space-between; height: 100%; margin-top: 5px; }
         .name-area { display: flex; align-items: flex-start; gap: 10px; flex-grow: 1; min-width: 0; padding-right: 25px; }
         .poke-icon { width: 55px; height: 55px; object-fit: contain; flex-shrink: 0; }
-        
-        /* 이름이 길어도 두 줄 이상 넘어가지 않고 깔끔하게 잘리도록 설정 */
         .name-area h3 { margin: 0; font-size: 17px; font-weight: 900; color: var(--pk-dark); word-break: keep-all; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; margin-top: 2px; }
-        
         .score-badge { color: var(--pk-blue); font-size: 38px; font-weight: 900; text-align: right; min-width: 70px; flex-shrink: 0; line-height: 1.2; }
         .score-badge.negative { color: var(--pk-red); } 
         .card-bottom { display: flex; align-items: center; gap: 12px; margin-top: 5px; }
@@ -221,7 +216,7 @@
         let currentGlobalStatus = 'setup'; 
         
         const pokeSprites = [
-            "https://mblogthumb-phinf.pstatic.net/20160817_259/retspe_14714118890125sC2j_PNG/%C7%C7%C4%AB%C3%F2_%281%29.png?type=w800", // 0. 피카츄
+            "https://w7.pngwing.com/pngs/632/853/png-transparent-pikachu-character-pokemon-x-and-y-pokemon-go-pikachu-pikachu-mammal-dog-like-mammal-vertebrate-thumbnail.png", // 0. 피카츄
             "https://i.namu.wiki/i/09TmbjtlbcUOXvzGJWkkjnObVKGOTh7jME7eqse_69NMQKJwYoUGnS7fIgr0dHGf_4A_DptAG3Q2lUhFlP6GPg.webp", // 1. 이브이
             "https://i.namu.wiki/i/UP40M8pkRSNTaDv_1SBZjcLaXdBfTZtRe31WWCB2uDHIbrS_q7UdfesM7D0zKzjEIpEErrJr-5l2EWg_E5McOQ.webp", // 2. 블래키
             "https://i.namu.wiki/i/-4E6V5ThdKH8pwtEQE1agME-EXunTxFDtrg2WbfxNWzOec_bTdwIgzo0FZn9yDiwRnNpmbxlxiSjBCTNPhkW8g.webp", // 3. 뮤
@@ -392,7 +387,6 @@
         function renderFirebaseGrid() {
             const grid = document.getElementById('gridChart'); grid.innerHTML = ""; 
             
-            // ★ 유령 현상(과거 띄어쓰기 찌꺼기) 원천 차단: 이름의 공백을 모두 제거하고 똑같은 이름이면 하나만 남김
             const rawKeys = Object.keys(currentGymsData).filter(k => k !== 'undefined' && k !== 'null' && k !== 'questions' && k.trim() !== '');
             let uniqueGyms = new Map();
             
@@ -428,7 +422,6 @@
                 }
             });
 
-            // ★ 동기화 충돌로 인한 2배 복제 버그 완벽 차단: 그리는 도중에 서버에 올리지 않고 시간차를 둠
             if (hasNewIcon) {
                 setTimeout(() => {
                     db.ref('globalConfig/iconMap').update(iconUpdates);
@@ -448,7 +441,7 @@
                 if(gym.requests) {
                     Object.values(gym.requests).forEach(req => {
                         if(req.status === 'completed') {
-                            if (!gymKeys.includes(req.team)) return; // 필터링된 진짜 체육관만 합산
+                            if (!gymKeys.includes(req.team)) return; 
                             if(!teamStats[req.team]) teamStats[req.team] = { score: 0, solved: 0 };
                             teamStats[req.team].score += (req.scoreDelta || 0);
                             teamStats[req.team].solved++;
@@ -953,7 +946,7 @@
                 Promise.all([
                     db.ref('gyms').remove(),
                     db.ref('reports').remove(),
-                    db.ref('globalConfig/iconMap').remove() // ★ 학급 리셋 시 아이콘 맵도 함께 삭제
+                    db.ref('globalConfig/iconMap').remove() 
                 ]).then(() => {
                     alert("💥 학급 완전 리셋 완료!\n교실 내 모든 패드가 첫 화면으로 자동 이동되었으며, 이전 반의 리포트도 모두 삭제되었습니다.");
                     document.getElementById('dashboardScreen').classList.add('hidden');

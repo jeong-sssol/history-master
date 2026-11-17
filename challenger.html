@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>히스토리 마스터: 체육관 배틀 ⚔️도전자 V43</title>
+    <title>히스토리 마스터: 체육관 배틀 ⚔️도전자 V44</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
@@ -424,7 +424,7 @@
             activeReqRef.set({ team: myTeamName, qIdx: currentQIndex, status: 'pending', timestamp: firebase.database.ServerValue.TIMESTAMP });
             
             activeReqRef.on('value', (snapshot) => { 
-                // ★ 관장이 요청을 무효(삭제) 처리한 경우 연동 (방어 로직)
+                // ★ 관장이 요청을 무효 처리하거나 삭제한 경우 즉각 방어 (도전자 창 닫기)
                 if (!snapshot.exists()) {
                     if (activeReqRef) { activeReqRef.off(); activeReqRef = null; }
                     document.getElementById('modalWaiting').classList.remove('open');

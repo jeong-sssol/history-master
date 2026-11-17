@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>히스토리 마스터: 체육관 V47</title>
+    <title>히스토리 마스터: 체육관 V49</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
@@ -132,7 +132,6 @@
                 
                 <div id="modeCreate">
                     <h2 style="font-size:24px; font-weight:900; margin:0 0 15px 0;">역사 체육관 개설</h2>
-                    <!-- ★ 수정 1: 띄어쓰기 예시를 상록체육관 으로 변경 -->
                     <input type="text" id="inputGymName" placeholder="체육관 이름 (예: 상록체육관)">
                     <input type="password" id="inputGymCode" maxlength="4" inputmode="numeric" placeholder="관장 패스코드 4자리">
                     <button class="btn btn-blue" style="width:100%; padding:14px;" onclick="startGym()">출제판 실행</button>
@@ -183,9 +182,8 @@
     <div id="modalEditGym" class="modal">
         <div class="modal-content" style="max-width: 400px; text-align:center;">
             <h3 style="margin-top:0; font-size:22px; font-weight:900; color:var(--pk-blue);">⚙️ 체육관 정보 수정</h3>
-            <p style="color:#666; font-size:14px; margin-bottom:15px; font-weight:bold;">새로운 패스코드를 입력하세요.</p>
+            <p style="color:#666; font-size:14px; margin-bottom:15px; font-weight:bold;">새로운 패스코드를 입력하세요.<br>(이름은 변경할 수 없습니다)</p>
             <input type="text" id="editGymNameInput" disabled style="background-color: #f1f2f6; color: #a4b0be; cursor: not-allowed; border-color:#e2e8f0; text-align:center;">
-            <p style="font-size:12px; color:var(--pk-red); margin-top:-10px; margin-bottom:15px; text-align:left; font-weight:bold;">※ 동시 접속 데이터 증발 방지를 위해 이름은 변경할 수 없습니다.</p>
             <input type="password" id="editGymCodeInput" maxlength="4" inputmode="numeric" placeholder="새 패스코드 4자리">
             <div style="display: flex; gap: 10px; margin-top: 20px;">
                 <button class="btn btn-blue" style="flex:1;" onclick="saveGymEdit()">비밀번호 저장</button>
@@ -220,7 +218,7 @@
 
     <div class="pos-modal-overlay" id="posOverlay">
         <div class="pos-receipt" id="posReceipt">
-            <button class="close-modal" style="top: 15px; right: 15px; color: rgba(0,0,0,0.4);" onclick="cancelReceiptProcess()" title="닫기(보류)">&times;</button>
+            <button class="close-modal" style="position: absolute; top: 15px; right: 15px; color: #fff; background: rgba(0,0,0,0.25); width: 32px; height: 32px; border-radius: 50%; font-size: 24px; display: flex; align-items: center; justify-content: center; text-shadow: none; z-index: 10;" onclick="cancelReceiptProcess()" title="닫기(보류)">&times;</button>
             <div class="receipt-header" id="posHeader">
                 <h2 id="posTitle">🔔 도전자 요청!</h2>
                 <p id="posSubTitle">정답을 듣고 판정해주세요.</p>
@@ -453,7 +451,6 @@
         function adminCheat() {
             const pwd = prompt("🚨 마스터 인증 코드를 입력하세요.");
             if(pwd === "history123") {
-                // ★ 수정 2: 관리자 모드 생성 시에도 띄어쓰기 없이 생성하도록 일치시킴
                 document.getElementById('inputGymName').value = "상록체육관"; document.getElementById('inputGymCode').value = "1111";
 
                 const cheatTotal = adminConfig.bombCnt + adminConfig.normCnt + adminConfig.jackCnt;
@@ -477,7 +474,6 @@
         }
 
         function startGym() {
-            // ★ 수정 3: 체육관 개설 시 이름의 모든 띄어쓰기(공백)를 원천 제거
             const inputName = document.getElementById('inputGymName').value.replace(/\s+/g, ''); 
             const inputCode = document.getElementById('inputGymCode').value;
             
@@ -693,6 +689,7 @@
             document.getElementById('modalEditor').classList.add('open');
         }
 
+        // ★ 서버 핀포인트 저장 후 즉시 화면 동기화
         function saveQuestion() {
             const text = document.getElementById('editQuestion').value; let finalAns = ""; let mcqOpts = []; let savedImgData = null;
             const previewEl = document.getElementById('imgPreviewElement'); if(previewEl.style.display === 'block') savedImgData = previewEl.src;
@@ -725,13 +722,33 @@
 
             if(tempQuota[scoreStr] <= 0) { alert(`앗! 지정된 ${getScoreStr(score)}점 배점 할당량이 남아있지 않습니다. 다른 배점을 선택해 주세요.`); refreshScoreDropdown(scoreStr, tempQuota); return; }
 
-            db.ref('gyms/' + gymName + '/questions/' + targetIdx).set(newQuestionObj).then(() => { closeModal('modalEditor'); });
+            db.ref('gyms/' + gymName + '/questions/' + targetIdx).set(newQuestionObj).then(() => { 
+                db.ref('gyms/' + gymName + '/questions').once('value').then((snap) => {
+                    const data = snap.val(); let newQuestions = Array(TOTAL_Q).fill(null);
+                    if(data) {
+                        if(Array.isArray(data)) { data.forEach((q, i) => { if(q) newQuestions[i] = q; }); } 
+                        else { Object.keys(data).forEach(k => { newQuestions[parseInt(k)] = data[k]; }); }
+                    }
+                    questions = newQuestions; recalcQuotaFromQuestions();
+                    closeModal('modalEditor');
+                });
+            });
         }
 
         function deleteCurrentQuestion() {
             if(isEditingNew) return;
             if(confirm("이 문항을 삭제하시겠습니까?")) {
-                db.ref('gyms/' + gymName + '/questions/' + editingIndex).remove().then(() => { closeModal('modalEditor'); });
+                db.ref('gyms/' + gymName + '/questions/' + editingIndex).remove().then(() => {
+                    db.ref('gyms/' + gymName + '/questions').once('value').then((snap) => {
+                        const data = snap.val(); let newQuestions = Array(TOTAL_Q).fill(null);
+                        if(data) {
+                            if(Array.isArray(data)) { data.forEach((q, i) => { if(q) newQuestions[i] = q; }); } 
+                            else { Object.keys(data).forEach(k => { newQuestions[parseInt(k)] = data[k]; }); }
+                        }
+                        questions = newQuestions; recalcQuotaFromQuestions();
+                        closeModal('modalEditor');
+                    });
+                });
             }
         }
 
@@ -750,7 +767,11 @@
 
         function selectOx(val) { oxAnswer = val; document.getElementById('oxO').className = `ox-btn ${val==='O'?'active-O':''}`; document.getElementById('oxX').className = `ox-btn ${val==='X'?'active-X':''}`; }
         function toggleDefensePanel() { document.getElementById('subQuestionArea').classList.toggle('hidden'); }
-        function closeModal(id) { document.getElementById(id).classList.remove('open'); if(id === 'modalEditor') { isEditing = false; renderBalls(); } }
+        
+        function closeModal(id) { 
+            document.getElementById(id).classList.remove('open'); 
+            if(id === 'modalEditor') { isEditing = false; renderBalls(); } 
+        }
 
         function refreshScoreDropdown(currentScore, customQuota = quota) {
             const select = document.getElementById('editScore'); select.innerHTML = "";
