@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>히스토리 마스터: 체육관 V51</title>
+    <title>히스토리 마스터: 체육관 V52</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
@@ -216,12 +216,10 @@
         </div>
     </div>
 
-    <!-- ★ 심사 모달창 UI 교정 (X버튼 헤더 안으로 이동, 지우기 버튼 하단 배치) -->
     <div class="pos-modal-overlay" id="posOverlay">
         <div class="pos-receipt" id="posReceipt">
+            <button class="close-modal" style="position: absolute; top: 15px; right: 15px; color: #fff; background: rgba(0,0,0,0.25); width: 32px; height: 32px; border-radius: 50%; font-size: 24px; display: flex; align-items: center; justify-content: center; text-shadow: none; z-index: 10;" onclick="cancelReceiptProcess()" title="닫기(보류)">&times;</button>
             <div class="receipt-header" id="posHeader">
-                <!-- ★ X 버튼을 헤더 안으로 이동시키고, 색상/z-index 조정하여 노란 배경 위에서도 무조건 보이게 설정 -->
-                <button class="close-modal" style="top: 15px; right: 15px; color: rgba(0,0,0,0.5); z-index: 10;" onclick="cancelReceiptProcess()" title="닫기(보류)">&times;</button>
                 <h2 id="posTitle">🔔 도전자 요청!</h2>
                 <p id="posSubTitle">정답을 듣고 판정해주세요.</p>
             </div>
@@ -242,7 +240,6 @@
                     <button class="btn-judge btn-o" onclick="handleSubJudge(true)">⭕ 방어 성공</button>
                     <button class="btn-judge btn-x" onclick="handleSubJudge(false)">✖️ 방어 실패</button>
                 </div>
-                <!-- ★ 하단에 잘못된 요청 지우기(무효) 버튼만 명확히 배치 -->
                 <div style="margin-top: 15px; border-top: 2px dashed #eee; padding-top: 15px;">
                     <button class="btn-judge" style="background:#f1f2f6; color:#636e72; font-size:14px; padding:12px; width:100%; box-shadow:none; border: 1px solid #dfe6e9;" onclick="deleteReceiptProcess()">🗑️ 잘못된 요청 지우기</button>
                 </div>
@@ -511,7 +508,6 @@
 
         function listenToQuestions() {
             db.ref('gyms/' + gymName + '/questions').on('value', (snapshot) => {
-                // ★ 수정: isEditing 락 해제. 다른 모둠원이 문제를 내도 배경의 몬스터볼은 실시간으로 업데이트됨
                 if(isScoreAdjustMode) return; 
                 
                 const data = snapshot.val(); let newQuestions = Array(TOTAL_Q).fill(null);
@@ -694,7 +690,7 @@
             document.getElementById('modalEditor').classList.add('open');
         }
 
-        // ★ 수정: on('value') 리스너가 알아서 갱신하므로, 저장 동작만 깔끔하게 실행
+        // ★ 동시 저장 밀어내기 및 실시간 방어 기능 완벽 적용 (트랜잭션)
         function saveQuestion() {
             const text = document.getElementById('editQuestion').value; let finalAns = ""; let mcqOpts = []; let savedImgData = null;
             const previewEl = document.getElementById('imgPreviewElement'); if(previewEl.style.display === 'block') savedImgData = previewEl.src;
@@ -716,24 +712,60 @@
 
             const newQuestionObj = { text, answer: finalAns, score: score, type: currentType, opts: mcqOpts, sub: subData, imgData: savedImgData };
 
-            let targetIdx = editingIndex;
-            if(isEditingNew) {
-                targetIdx = questions.findIndex(q => q === null); 
-                if(targetIdx === -1) { alert("문제를 넣을 빈 공간이 부족합니다."); closeModal('modalEditor'); return; }
-            }
+            // Firebase 트랜잭션: 동시 접속 시 덮어쓰기를 막고 순차적으로 남은 빈자리에 밀어넣음
+            db.ref('gyms/' + gymName + '/questions').transaction((currentQuestions) => {
+                let tempQs = currentQuestions || Array(TOTAL_Q).fill(null);
+                if(!Array.isArray(tempQs)) {
+                    let arr = Array(TOTAL_Q).fill(null);
+                    Object.keys(tempQs).forEach(k => { arr[parseInt(k)] = tempQs[k]; });
+                    tempQs = arr;
+                }
 
-            let tempQuota = {}; tempQuota[String(adminConfig.bombVal)] = adminConfig.bombCnt; tempQuota[String(adminConfig.normVal)] = adminConfig.normCnt; tempQuota[String(adminConfig.jackVal)] = adminConfig.jackCnt;
-            questions.forEach((q, idx) => { if(q && idx !== targetIdx) { tempQuota[String(q.score)]--; } });
+                let tIdx = editingIndex;
+                if(isEditingNew) {
+                    tIdx = tempQs.findIndex(q => q === null);
+                    if(tIdx === -1) return; // 공간 없음 (중단)
+                }
 
-            if(tempQuota[scoreStr] <= 0) { alert(`앗! 지정된 ${getScoreStr(score)}점 배점 할당량이 남아있지 않습니다. 다른 배점을 선택해 주세요.`); refreshScoreDropdown(scoreStr, tempQuota); return; }
+                let tempQuota = {}; tempQuota[String(adminConfig.bombVal)] = adminConfig.bombCnt; tempQuota[String(adminConfig.normVal)] = adminConfig.normCnt; tempQuota[String(adminConfig.jackVal)] = adminConfig.jackCnt;
+                tempQs.forEach((q, idx) => { if(q && idx !== tIdx) { tempQuota[String(q.score)]--; } });
 
-            db.ref('gyms/' + gymName + '/questions/' + targetIdx).set(newQuestionObj).then(() => { closeModal('modalEditor'); });
+                if(tempQuota[scoreStr] <= 0) return; // 배점 소진 (중단)
+
+                tempQs[tIdx] = newQuestionObj;
+                return tempQs; 
+            }, (error, committed, snapshot) => {
+                if (error) {
+                    alert("통신 오류가 발생했습니다.");
+                } else if (!committed) {
+                    alert("앗! 찰나의 순간에 다른 친구가 먼저 저장해서 남은 자리나 배점이 사라졌습니다.\n화면이 갱신되니 다시 확인해 주세요!");
+                    closeModal('modalEditor');
+                } else {
+                    const data = snapshot.val(); let newQuestions = Array(TOTAL_Q).fill(null);
+                    if(data) {
+                        if(Array.isArray(data)) { data.forEach((q, i) => { if(q) newQuestions[i] = q; }); }
+                        else { Object.keys(data).forEach(k => { newQuestions[parseInt(k)] = data[k]; }); }
+                    }
+                    questions = newQuestions; recalcQuotaFromQuestions();
+                    closeModal('modalEditor');
+                }
+            });
         }
 
         function deleteCurrentQuestion() {
             if(isEditingNew) return;
             if(confirm("이 문항을 삭제하시겠습니까?")) {
-                db.ref('gyms/' + gymName + '/questions/' + editingIndex).remove().then(() => { closeModal('modalEditor'); });
+                db.ref('gyms/' + gymName + '/questions/' + editingIndex).remove().then(() => { 
+                    db.ref('gyms/' + gymName + '/questions').once('value').then((snap) => {
+                        const data = snap.val(); let newQuestions = Array(TOTAL_Q).fill(null);
+                        if(data) {
+                            if(Array.isArray(data)) { data.forEach((q, i) => { if(q) newQuestions[i] = q; }); } 
+                            else { Object.keys(data).forEach(k => { newQuestions[parseInt(k)] = data[k]; }); }
+                        }
+                        questions = newQuestions; recalcQuotaFromQuestions();
+                        closeModal('modalEditor');
+                    });
+                });
             }
         }
 
@@ -752,7 +784,11 @@
 
         function selectOx(val) { oxAnswer = val; document.getElementById('oxO').className = `ox-btn ${val==='O'?'active-O':''}`; document.getElementById('oxX').className = `ox-btn ${val==='X'?'active-X':''}`; }
         function toggleDefensePanel() { document.getElementById('subQuestionArea').classList.toggle('hidden'); }
-        function closeModal(id) { document.getElementById(id).classList.remove('open'); if(id === 'modalEditor') { isEditing = false; renderBalls(); } }
+        
+        function closeModal(id) { 
+            document.getElementById(id).classList.remove('open'); 
+            if(id === 'modalEditor') { isEditing = false; renderBalls(); } 
+        }
 
         function refreshScoreDropdown(currentScore, customQuota = quota) {
             const select = document.getElementById('editScore'); select.innerHTML = "";
