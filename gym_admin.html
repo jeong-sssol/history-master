@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>히스토리 마스터: 체육관 V52</title>
+    <title>히스토리 마스터 V53</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
@@ -145,7 +145,6 @@
                     <button class="btn btn-green" style="width:100%; padding:14px;" onclick="reconnectGym()">재접속하기</button>
                     <p class="link-text" onclick="toggleMode('create')">⬅ 새 체육관 개설하기</p>
                 </div>
-
             </div>
         </div>
 
@@ -508,6 +507,7 @@
 
         function listenToQuestions() {
             db.ref('gyms/' + gymName + '/questions').on('value', (snapshot) => {
+                // 모달창이 열려있더라도 무조건 실시간 동기화를 적용하여 배경이 즉시 갱신되도록 합니다.
                 if(isScoreAdjustMode) return; 
                 
                 const data = snapshot.val(); let newQuestions = Array(TOTAL_Q).fill(null);
@@ -690,7 +690,7 @@
             document.getElementById('modalEditor').classList.add('open');
         }
 
-        // ★ 동시 저장 밀어내기 및 실시간 방어 기능 완벽 적용 (트랜잭션)
+        // ★ Firebase 트랜잭션을 사용해 완벽한 순차적 밀어내기 및 빈자리 찾기 적용
         function saveQuestion() {
             const text = document.getElementById('editQuestion').value; let finalAns = ""; let mcqOpts = []; let savedImgData = null;
             const previewEl = document.getElementById('imgPreviewElement'); if(previewEl.style.display === 'block') savedImgData = previewEl.src;
@@ -712,9 +712,10 @@
 
             const newQuestionObj = { text, answer: finalAns, score: score, type: currentType, opts: mcqOpts, sub: subData, imgData: savedImgData };
 
-            // Firebase 트랜잭션: 동시 접속 시 덮어쓰기를 막고 순차적으로 남은 빈자리에 밀어넣음
+            // 서버에 동시 접속 시 번호표 뽑듯 순차적으로 밀어 넣는 트랜잭션 실행
             db.ref('gyms/' + gymName + '/questions').transaction((currentQuestions) => {
                 let tempQs = currentQuestions || Array(TOTAL_Q).fill(null);
+                
                 if(!Array.isArray(tempQs)) {
                     let arr = Array(TOTAL_Q).fill(null);
                     Object.keys(tempQs).forEach(k => { arr[parseInt(k)] = tempQs[k]; });
@@ -722,25 +723,30 @@
                 }
 
                 let tIdx = editingIndex;
+                // 새 문제인 경우 가장 빠른 빈자리를 찾음
                 if(isEditingNew) {
                     tIdx = tempQs.findIndex(q => q === null);
-                    if(tIdx === -1) return; // 공간 없음 (중단)
+                    if(tIdx === -1) return; // 10개가 꽉 찼으면 튕겨냄
                 }
 
+                // 배점 쿼터 검사
                 let tempQuota = {}; tempQuota[String(adminConfig.bombVal)] = adminConfig.bombCnt; tempQuota[String(adminConfig.normVal)] = adminConfig.normCnt; tempQuota[String(adminConfig.jackVal)] = adminConfig.jackCnt;
                 tempQs.forEach((q, idx) => { if(q && idx !== tIdx) { tempQuota[String(q.score)]--; } });
 
-                if(tempQuota[scoreStr] <= 0) return; // 배점 소진 (중단)
+                if(tempQuota[scoreStr] <= 0) return; // 쿼터 초과 시 튕겨냄
 
                 tempQs[tIdx] = newQuestionObj;
                 return tempQs; 
+
             }, (error, committed, snapshot) => {
                 if (error) {
                     alert("통신 오류가 발생했습니다.");
                 } else if (!committed) {
-                    alert("앗! 찰나의 순간에 다른 친구가 먼저 저장해서 남은 자리나 배점이 사라졌습니다.\n화면이 갱신되니 다시 확인해 주세요!");
+                    // 저장에 실패(꽉 찼거나 배점 초과)했을 때만 팝업 경고 후 모달 닫기
+                    alert("앗! 찰나의 순간에 다른 친구가 먼저 저장해서 빈자리나 배점이 모두 소진되었습니다.\n화면이 갱신되니 남은 자리를 다시 확인해 주세요!");
                     closeModal('modalEditor');
                 } else {
+                    // 순차 밀어넣기 저장 성공 시 바로 화면 갱신
                     const data = snapshot.val(); let newQuestions = Array(TOTAL_Q).fill(null);
                     if(data) {
                         if(Array.isArray(data)) { data.forEach((q, i) => { if(q) newQuestions[i] = q; }); }
