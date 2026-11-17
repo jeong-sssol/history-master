@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>히스토리 마스터 V53</title>
+    <title>히스토리 마스터: 체육관 V54</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
@@ -145,6 +145,7 @@
                     <button class="btn btn-green" style="width:100%; padding:14px;" onclick="reconnectGym()">재접속하기</button>
                     <p class="link-text" onclick="toggleMode('create')">⬅ 새 체육관 개설하기</p>
                 </div>
+
             </div>
         </div>
 
@@ -507,7 +508,6 @@
 
         function listenToQuestions() {
             db.ref('gyms/' + gymName + '/questions').on('value', (snapshot) => {
-                // 모달창이 열려있더라도 무조건 실시간 동기화를 적용하여 배경이 즉시 갱신되도록 합니다.
                 if(isScoreAdjustMode) return; 
                 
                 const data = snapshot.val(); let newQuestions = Array(TOTAL_Q).fill(null);
@@ -690,7 +690,7 @@
             document.getElementById('modalEditor').classList.add('open');
         }
 
-        // ★ Firebase 트랜잭션을 사용해 완벽한 순차적 밀어내기 및 빈자리 찾기 적용
+        // ★ Firebase 트랜잭션: 동시 접속 시 덮어쓰기를 완벽히 막고 순차적으로 남은 빈자리에 밀어넣음
         function saveQuestion() {
             const text = document.getElementById('editQuestion').value; let finalAns = ""; let mcqOpts = []; let savedImgData = null;
             const previewEl = document.getElementById('imgPreviewElement'); if(previewEl.style.display === 'block') savedImgData = previewEl.src;
@@ -712,41 +712,67 @@
 
             const newQuestionObj = { text, answer: finalAns, score: score, type: currentType, opts: mcqOpts, sub: subData, imgData: savedImgData };
 
-            // 서버에 동시 접속 시 번호표 뽑듯 순차적으로 밀어 넣는 트랜잭션 실행
+            let abortReason = ""; // 트랜잭션 중단 이유를 담을 변수
+
             db.ref('gyms/' + gymName + '/questions').transaction((currentQuestions) => {
-                let tempQs = currentQuestions || Array(TOTAL_Q).fill(null);
-                
-                if(!Array.isArray(tempQs)) {
-                    let arr = Array(TOTAL_Q).fill(null);
-                    Object.keys(tempQs).forEach(k => { arr[parseInt(k)] = tempQs[k]; });
-                    tempQs = arr;
+                // 파이어베이스가 배열을 잘라먹고 내려보내는 것을 방지하기 위해 강제로 10칸짜리 뼈대 생성
+                let arr = Array(TOTAL_Q).fill(null);
+                if (currentQuestions) {
+                    if (Array.isArray(currentQuestions)) {
+                        currentQuestions.forEach((q, i) => { if (q) arr[i] = q; });
+                    } else {
+                        Object.keys(currentQuestions).forEach(k => { arr[parseInt(k)] = currentQuestions[k]; });
+                    }
                 }
+                let tempQs = arr;
 
                 let tIdx = editingIndex;
-                // 새 문제인 경우 가장 빠른 빈자리를 찾음
+                
+                // 새 문제인 경우 가장 첫 번째 빈자리(null)를 찾음
                 if(isEditingNew) {
-                    tIdx = tempQs.findIndex(q => q === null);
-                    if(tIdx === -1) return; // 10개가 꽉 찼으면 튕겨냄
+                    tIdx = tempQs.findIndex(q => !q);
+                    if(tIdx === -1) { abortReason = "full"; return; } // 자리가 없음
                 }
 
                 // 배점 쿼터 검사
-                let tempQuota = {}; tempQuota[String(adminConfig.bombVal)] = adminConfig.bombCnt; tempQuota[String(adminConfig.normVal)] = adminConfig.normCnt; tempQuota[String(adminConfig.jackVal)] = adminConfig.jackCnt;
-                tempQs.forEach((q, idx) => { if(q && idx !== tIdx) { tempQuota[String(q.score)]--; } });
+                let tempQuota = {}; 
+                tempQuota[String(adminConfig.bombVal)] = adminConfig.bombCnt; 
+                tempQuota[String(adminConfig.normVal)] = adminConfig.normCnt; 
+                tempQuota[String(adminConfig.jackVal)] = adminConfig.jackCnt;
 
-                if(tempQuota[scoreStr] <= 0) return; // 쿼터 초과 시 튕겨냄
+                tempQs.forEach((q, idx) => { 
+                    if(q && idx !== tIdx) { tempQuota[String(q.score)]--; } 
+                });
+
+                if(tempQuota[scoreStr] <= 0) { abortReason = "quota"; return; } // 배점이 없음
 
                 tempQs[tIdx] = newQuestionObj;
-                return tempQs; 
+                return tempQs; // 정상적으로 갱신될 데이터 반환
 
             }, (error, committed, snapshot) => {
                 if (error) {
                     alert("통신 오류가 발생했습니다.");
                 } else if (!committed) {
-                    // 저장에 실패(꽉 찼거나 배점 초과)했을 때만 팝업 경고 후 모달 닫기
-                    alert("앗! 찰나의 순간에 다른 친구가 먼저 저장해서 빈자리나 배점이 모두 소진되었습니다.\n화면이 갱신되니 남은 자리를 다시 확인해 주세요!");
-                    closeModal('modalEditor');
+                    // ★ 저장 거부 시 이유에 따라 분기 처리
+                    if (abortReason === "full") {
+                        alert("앗! 찰나의 순간에 마지막 빈자리를 다른 친구가 먼저 채웠습니다!");
+                        closeModal('modalEditor');
+                    } else if (abortReason === "quota") {
+                        alert("앗! 찰나의 순간에 다른 친구가 해당 배점을 먼저 사용해버렸습니다!\n다른 배점으로 변경 후 다시 저장해주세요.");
+                        // 모달을 닫지 않고 배경과 쿼터만 최신 상태로 갱신하여 살려둠
+                        db.ref('gyms/' + gymName + '/questions').once('value').then((snap) => {
+                            const data = snap.val(); let newQuestions = Array(TOTAL_Q).fill(null);
+                            if(data) {
+                                if(Array.isArray(data)) { data.forEach((q, i) => { if(q) newQuestions[i] = q; }); }
+                                else { Object.keys(data).forEach(k => { newQuestions[parseInt(k)] = data[k]; }); }
+                            }
+                            questions = newQuestions; recalcQuotaFromQuestions();
+                            refreshScoreDropdown(null); // 선택 초기화된 상태로 최신 쿼터 드롭다운 갱신
+                            renderBalls(); // 배경 몬스터볼 갱신
+                        });
+                    }
                 } else {
-                    // 순차 밀어넣기 저장 성공 시 바로 화면 갱신
+                    // 정상 저장 시 화면 동기화 후 모달 닫기
                     const data = snapshot.val(); let newQuestions = Array(TOTAL_Q).fill(null);
                     if(data) {
                         if(Array.isArray(data)) { data.forEach((q, i) => { if(q) newQuestions[i] = q; }); }
@@ -758,6 +784,7 @@
             });
         }
 
+        // 삭제 시에도 즉각 서버 동기화 반영
         function deleteCurrentQuestion() {
             if(isEditingNew) return;
             if(confirm("이 문항을 삭제하시겠습니까?")) {
@@ -791,6 +818,7 @@
         function selectOx(val) { oxAnswer = val; document.getElementById('oxO').className = `ox-btn ${val==='O'?'active-O':''}`; document.getElementById('oxX').className = `ox-btn ${val==='X'?'active-X':''}`; }
         function toggleDefensePanel() { document.getElementById('subQuestionArea').classList.toggle('hidden'); }
         
+        // 모달창 닫을 때 무조건 한 번 화면을 다시 그리도록 강제 연동
         function closeModal(id) { 
             document.getElementById(id).classList.remove('open'); 
             if(id === 'modalEditor') { isEditing = false; renderBalls(); } 
