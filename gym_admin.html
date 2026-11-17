@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>히스토리 마스터: 체육관 V50</title>
+    <title>히스토리 마스터: 체육관 V51</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
@@ -216,10 +216,12 @@
         </div>
     </div>
 
+    <!-- ★ 심사 모달창 UI 교정 (X버튼 헤더 안으로 이동, 지우기 버튼 하단 배치) -->
     <div class="pos-modal-overlay" id="posOverlay">
         <div class="pos-receipt" id="posReceipt">
-            <button class="close-modal" style="position: absolute; top: 15px; right: 15px; color: #fff; background: rgba(0,0,0,0.25); width: 32px; height: 32px; border-radius: 50%; font-size: 24px; display: flex; align-items: center; justify-content: center; text-shadow: none; z-index: 10;" onclick="cancelReceiptProcess()" title="닫기(보류)">&times;</button>
             <div class="receipt-header" id="posHeader">
+                <!-- ★ X 버튼을 헤더 안으로 이동시키고, 색상/z-index 조정하여 노란 배경 위에서도 무조건 보이게 설정 -->
+                <button class="close-modal" style="top: 15px; right: 15px; color: rgba(0,0,0,0.5); z-index: 10;" onclick="cancelReceiptProcess()" title="닫기(보류)">&times;</button>
                 <h2 id="posTitle">🔔 도전자 요청!</h2>
                 <p id="posSubTitle">정답을 듣고 판정해주세요.</p>
             </div>
@@ -240,6 +242,7 @@
                     <button class="btn-judge btn-o" onclick="handleSubJudge(true)">⭕ 방어 성공</button>
                     <button class="btn-judge btn-x" onclick="handleSubJudge(false)">✖️ 방어 실패</button>
                 </div>
+                <!-- ★ 하단에 잘못된 요청 지우기(무효) 버튼만 명확히 배치 -->
                 <div style="margin-top: 15px; border-top: 2px dashed #eee; padding-top: 15px;">
                     <button class="btn-judge" style="background:#f1f2f6; color:#636e72; font-size:14px; padding:12px; width:100%; box-shadow:none; border: 1px solid #dfe6e9;" onclick="deleteReceiptProcess()">🗑️ 잘못된 요청 지우기</button>
                 </div>
@@ -474,7 +477,6 @@
         }
 
         function startGym() {
-            // ★ 수정: 공백 자동 제거로 중복 생성 원천 차단
             const inputName = document.getElementById('inputGymName').value.replace(/\s+/g, ''); 
             const inputCode = document.getElementById('inputGymCode').value;
             
@@ -509,8 +511,8 @@
 
         function listenToQuestions() {
             db.ref('gyms/' + gymName + '/questions').on('value', (snapshot) => {
-                // ★ 내 기기에서 모달창을 열고 있지 않은 경우에만 화면 즉시 갱신 (팀원 동기화)
-                if(isEditing || isScoreAdjustMode) return; 
+                // ★ 수정: isEditing 락 해제. 다른 모둠원이 문제를 내도 배경의 몬스터볼은 실시간으로 업데이트됨
+                if(isScoreAdjustMode) return; 
                 
                 const data = snapshot.val(); let newQuestions = Array(TOTAL_Q).fill(null);
                 if(data) {
@@ -519,7 +521,7 @@
                 }
                 if(JSON.stringify(questions) !== JSON.stringify(newQuestions)) {
                     questions = newQuestions; recalcQuotaFromQuestions();
-                    renderBalls(); 
+                    renderBalls();
                 }
             });
         }
@@ -692,7 +694,7 @@
             document.getElementById('modalEditor').classList.add('open');
         }
 
-        // ★ 모달이 닫힐 때만 화면에 그리도록 하여, 친구가 모달을 안 킨 상태라면 실시간 반영되도록 함.
+        // ★ 수정: on('value') 리스너가 알아서 갱신하므로, 저장 동작만 깔끔하게 실행
         function saveQuestion() {
             const text = document.getElementById('editQuestion').value; let finalAns = ""; let mcqOpts = []; let savedImgData = null;
             const previewEl = document.getElementById('imgPreviewElement'); if(previewEl.style.display === 'block') savedImgData = previewEl.src;
@@ -725,36 +727,13 @@
 
             if(tempQuota[scoreStr] <= 0) { alert(`앗! 지정된 ${getScoreStr(score)}점 배점 할당량이 남아있지 않습니다. 다른 배점을 선택해 주세요.`); refreshScoreDropdown(scoreStr, tempQuota); return; }
 
-            // ★ 핀포인트 저장 후 모달 닫기
-            db.ref('gyms/' + gymName + '/questions/' + targetIdx).set(newQuestionObj).then(() => { 
-                // 강제 서버 동기화
-                db.ref('gyms/' + gymName + '/questions').once('value').then((snap) => {
-                    const data = snap.val(); let newQuestions = Array(TOTAL_Q).fill(null);
-                    if(data) {
-                        if(Array.isArray(data)) { data.forEach((q, i) => { if(q) newQuestions[i] = q; }); } 
-                        else { Object.keys(data).forEach(k => { newQuestions[parseInt(k)] = data[k]; }); }
-                    }
-                    questions = newQuestions; recalcQuotaFromQuestions();
-                    closeModal('modalEditor'); // 닫으면서 renderBalls() 자동 호출됨
-                });
-            });
+            db.ref('gyms/' + gymName + '/questions/' + targetIdx).set(newQuestionObj).then(() => { closeModal('modalEditor'); });
         }
 
-        // ★ 삭제 시에도 서버 즉각 동기화 적용
         function deleteCurrentQuestion() {
             if(isEditingNew) return;
             if(confirm("이 문항을 삭제하시겠습니까?")) {
-                db.ref('gyms/' + gymName + '/questions/' + editingIndex).remove().then(() => { 
-                    db.ref('gyms/' + gymName + '/questions').once('value').then((snap) => {
-                        const data = snap.val(); let newQuestions = Array(TOTAL_Q).fill(null);
-                        if(data) {
-                            if(Array.isArray(data)) { data.forEach((q, i) => { if(q) newQuestions[i] = q; }); } 
-                            else { Object.keys(data).forEach(k => { newQuestions[parseInt(k)] = data[k]; }); }
-                        }
-                        questions = newQuestions; recalcQuotaFromQuestions();
-                        closeModal('modalEditor');
-                    });
-                });
+                db.ref('gyms/' + gymName + '/questions/' + editingIndex).remove().then(() => { closeModal('modalEditor'); });
             }
         }
 
@@ -773,12 +752,7 @@
 
         function selectOx(val) { oxAnswer = val; document.getElementById('oxO').className = `ox-btn ${val==='O'?'active-O':''}`; document.getElementById('oxX').className = `ox-btn ${val==='X'?'active-X':''}`; }
         function toggleDefensePanel() { document.getElementById('subQuestionArea').classList.toggle('hidden'); }
-        
-        // ★ 모달을 닫을 때(저장/삭제 포함) 무조건 한 번 화면을 다시 그리도록 보완
-        function closeModal(id) { 
-            document.getElementById(id).classList.remove('open'); 
-            if(id === 'modalEditor') { isEditing = false; renderBalls(); } 
-        }
+        function closeModal(id) { document.getElementById(id).classList.remove('open'); if(id === 'modalEditor') { isEditing = false; renderBalls(); } }
 
         function refreshScoreDropdown(currentScore, customQuota = quota) {
             const select = document.getElementById('editScore'); select.innerHTML = "";
