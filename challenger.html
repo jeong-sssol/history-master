@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>히스토리 마스터: 체육관 배틀 ⚔️도전자 V44</title>
+    <title>히스토리 마스터: 체육관 배틀 ⚔️도전자 V45</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
@@ -53,11 +53,17 @@
         .stadium-img { max-width: 80%; max-height: 100%; object-fit: contain; mix-blend-mode: multiply; }
         .modal input[type="password"] { width: 100%; padding: 18px; font-size: 32px; text-align: center; letter-spacing: 12px; border: 4px solid var(--pk-border); border-radius: 15px; margin-bottom: 25px; font-weight: 900; background: #f8f9fa; }
         
-        .battle-view { position: fixed; top: 0; left: 0; width: 100%; height: 100dvh; background: #f1f2f6; z-index: 50; display: flex; flex-direction: column; transform: translateY(100%); transition: transform 0.3s ease-out; }
+        /* [★ 배틀 화면 유연한 스크롤 및 사파리 툴바 가림 해결] */
+        .battle-view { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f1f2f6; z-index: 50; display: flex; flex-direction: column; transform: translateY(100%); transition: transform 0.3s ease-out; padding-top: max(env(safe-area-inset-top), 10px); }
         .battle-view.open { transform: translateY(0); }
         .battle-header { background: var(--pk-white); padding: 15px 20px; border-bottom: 3px solid var(--pk-border); box-shadow: 0 4px 12px rgba(0,0,0,0.05); flex-shrink: 0; }
         .battle-title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-        .battle-title { margin: 0; font-size: 24px; font-weight: 900; color: var(--pk-dark); }
+        
+        /* [★ 배틀 화면 미니 전광판 CSS] */
+        .battle-title-wrap { display: flex; flex-direction: column; }
+        .battle-title { margin: 0; font-size: 22px; font-weight: 900; color: var(--pk-dark); line-height: 1.2; }
+        .battle-mini-hud { font-size: 14px; font-weight: bold; color: var(--pk-red); margin-top: 4px; display: flex; align-items: center; gap: 8px; }
+        
         .gym-score-panel { background: #fffcf0; border: 2px solid var(--pk-yellow); border-radius: 12px; padding: 10px; box-shadow: inset 0 2px 5px rgba(0,0,0,0.05); overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
         .gym-score-table { min-width: 100%; border-collapse: collapse; text-align: center; font-size: 14px; background: white; border-radius: 8px; overflow: hidden; display: inline-table; }
         .gym-score-table th, .gym-score-table td { border: 1px solid #e2e8f0; padding: 8px; font-weight: 900; }
@@ -68,7 +74,7 @@
         .total-score-cell { background: #fff4e6 !important; border-left: 2px solid var(--pk-yellow) !important; vertical-align: middle; min-width: 130px; text-align: center; }
         .total-score-label { font-size: 13px; color: #666; display: block; font-weight: bold; }
         .total-score-num { font-size: 34px; color: var(--pk-red); font-weight: 900; display: block; margin-top: 2px; }
-        .question-grid { flex: 1; padding: 15px; padding-bottom: 80px; overflow-y: auto; -webkit-overflow-scrolling: touch; display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; align-content: flex-start; }
+        .question-grid { flex: 1; padding: 15px; padding-bottom: max(env(safe-area-inset-bottom, 80px), 80px); overflow-y: auto; -webkit-overflow-scrolling: touch; display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; align-content: flex-start; }
         .q-card { background: white; border-radius: 15px; padding: 15px; border: 3px solid var(--pk-border); text-align: left; box-shadow: 0 4px 8px rgba(0,0,0,0.05); display: flex; flex-direction: column; }
         .q-card.solved { opacity: 0.4; background: #e0e0e0; pointer-events: none; filter: grayscale(100%); border-color: #ccc; }
         .q-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 2px dashed #eee; padding-bottom: 8px; }
@@ -129,7 +135,14 @@
 
         <div id="battleView" class="battle-view">
             <div class="battle-header">
-                <div class="battle-title-row"><h2 class="battle-title">🏟️ <span id="battleGymName">체육관</span></h2><button class="btn" style="background:#ddd; color:#333; width:auto; padding:8px 15px; font-size:14px;" onclick="closeBattleView()">도망가기 🏃</button></div>
+                <div class="battle-title-row">
+                    <!-- [★ 배틀뷰 전광판] 미니 타이머와 총점 추가 -->
+                    <div class="battle-title-wrap">
+                        <h2 class="battle-title">🏟️ <span id="battleGymName">체육관</span></h2>
+                        <div class="battle-mini-hud">⏱️ <span id="battleHudTimer">00:00</span> &nbsp;|&nbsp; 🏆 <span id="battleHudScore">0점</span></div>
+                    </div>
+                    <button class="btn" style="background:#ddd; color:#333; width:auto; padding:10px 18px; font-size:15px;" onclick="closeBattleView()">도망가기 🏃</button>
+                </div>
                 <div class="gym-score-panel"><table class="gym-score-table"><tbody id="gymScoreTableBody"></tbody></table></div>
             </div>
             <div class="question-grid" id="questionGrid"></div>
@@ -194,7 +207,7 @@
         let myTeamName = null; let currentTargetGym = null; let currentDBQuestions = []; let activeGymsFromDB = [];
         let currentQIndex = -1; let currentCardEl = null; let activeReqRef = null; 
         
-        let lastClassReset = 0; let lastRoundReset = 0; let chalTimer = null;
+        let lastClassReset = 0; let lastRoundReset = 0; 
         let currentGlobalStatus = 'setup';
 
         const pinPositions = [ { top: '18%', left: '20%' }, { top: '35%', left: '60%' }, { top: '50%', left: '15%' }, { top: '65%', left: '75%' }, { top: '10%', left: '80%' }, { top: '80%', left: '35%' }, { top: '75%', left: '15%' } ];
@@ -202,10 +215,13 @@
 
         function getScoreStr(pts) { return pts > 0 ? "+" + pts : pts; }
 
+        // [★ 시계 동기화] 파이어베이스에서 실시간으로 깎이는 시간(timeLeft)을 받아와 모든 화면(HUD 및 배틀뷰)에 동시 출력
         function updateHudTime(seconds) {
             let m = Math.floor(seconds / 60).toString().padStart(2, '0');
             let s = (seconds % 60).toString().padStart(2, '0');
-            document.getElementById('hudTimer').innerText = `${m}:${s}`;
+            const timeStr = `${m}:${s}`;
+            document.getElementById('hudTimer').innerText = timeStr;
+            document.getElementById('battleHudTimer').innerText = timeStr; // 배틀뷰 미니 시계 갱신
         }
 
         function getGymTarget(gymData) {
@@ -269,11 +285,15 @@
                 }
             }
 
+            // [★ 시계 동기화] 마스터에서 내려주는 timeLeft를 그대로 받아서 뿌림 (학생 기기 개별 타이머 삭제)
+            if(config.timeLeft !== undefined) {
+                updateHudTime(config.timeLeft);
+            }
+
             if(config.status === 'stop') {
-                clearInterval(chalTimer); updateHudTime(0); 
                 if(document.getElementById('loginScreen').classList.contains('hidden')) { document.getElementById('modalRoundOver').classList.add('open'); }
             } else if(config.status === 'setup') {
-                clearInterval(chalTimer); updateHudTime(config.timeLimitMin * 60); document.getElementById('modalRoundOver').classList.remove('open');
+                document.getElementById('modalRoundOver').classList.remove('open');
             }
 
             if(config.maxSolvePerGym) {
@@ -283,9 +303,7 @@
             }
 
             if(config.status === 'start') {
-                document.getElementById('modalRoundOver').classList.remove('open'); clearInterval(chalTimer);
-                let elapsedSec = Math.floor((Date.now() - config.startTimestamp) / 1000); let cTime = config.timeLeft - elapsedSec; if(cTime < 0) cTime = 0;
-                chalTimer = setInterval(() => { if(cTime > 0) { cTime--; updateHudTime(cTime); } else clearInterval(chalTimer); }, 1000);
+                document.getElementById('modalRoundOver').classList.remove('open'); 
             } 
         });
 
@@ -358,7 +376,10 @@
         }
 
         function updateMapHUD() {
+            // [★ 배틀뷰 전광판] 맵 점수 업데이트 시 배틀 화면 상단 미니 전광판의 점수도 함께 갱신
             document.getElementById('mapScore').innerText = `${worldState.totalScore}점`;
+            document.getElementById('battleHudScore').innerText = `${worldState.totalScore}점`;
+            
             const countEl = document.getElementById('mapSolveCount');
             if(isTimeAttack) { countEl.innerText = `(${worldState.solvedCount}/🚀)`; countEl.classList.add('time-attack'); } 
             else { countEl.innerText = `(${worldState.solvedCount}/${adminConfig.totalPossible})`; countEl.classList.remove('time-attack'); }
@@ -424,7 +445,6 @@
             activeReqRef.set({ team: myTeamName, qIdx: currentQIndex, status: 'pending', timestamp: firebase.database.ServerValue.TIMESTAMP });
             
             activeReqRef.on('value', (snapshot) => { 
-                // ★ 관장이 요청을 무효 처리하거나 삭제한 경우 즉각 방어 (도전자 창 닫기)
                 if (!snapshot.exists()) {
                     if (activeReqRef) { activeReqRef.off(); activeReqRef = null; }
                     document.getElementById('modalWaiting').classList.remove('open');
