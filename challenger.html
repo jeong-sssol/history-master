@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>히스토리 마스터: 체육관 배틀 ⚔️도전자 V45</title>
+    <title>히스토리 마스터: 체육관 배틀 ⚔️도전자 V46</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
@@ -53,15 +53,17 @@
         .stadium-img { max-width: 80%; max-height: 100%; object-fit: contain; mix-blend-mode: multiply; }
         .modal input[type="password"] { width: 100%; padding: 18px; font-size: 32px; text-align: center; letter-spacing: 12px; border: 4px solid var(--pk-border); border-radius: 15px; margin-bottom: 25px; font-weight: 900; background: #f8f9fa; }
         
-        /* [★ 배틀 화면 유연한 스크롤 및 사파리 툴바 가림 해결] */
-        .battle-view { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f1f2f6; z-index: 50; display: flex; flex-direction: column; transform: translateY(100%); transition: transform 0.3s ease-out; padding-top: max(env(safe-area-inset-top), 10px); }
+        .battle-view { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f1f2f6; z-index: 50; display: flex; flex-direction: column; transform: translateY(100%); transition: transform 0.3s ease-out; }
         .battle-view.open { transform: translateY(0); }
-        .battle-header { background: var(--pk-white); padding: 15px 20px; border-bottom: 3px solid var(--pk-border); box-shadow: 0 4px 12px rgba(0,0,0,0.05); flex-shrink: 0; }
-        .battle-title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
         
-        /* [★ 배틀 화면 미니 전광판 CSS] */
+        /* ★ 아이폰/사파리 화면 잘림 완벽 방어: 넉넉한 40px의 최소 상단 여백을 강제 부여 */
+        .battle-header { background: var(--pk-white); padding: max(env(safe-area-inset-top), 40px) 20px 15px 20px; border-bottom: 3px solid var(--pk-border); box-shadow: 0 4px 12px rgba(0,0,0,0.05); flex-shrink: 0; }
+        
+        .battle-title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
         .battle-title-wrap { display: flex; flex-direction: column; }
         .battle-title { margin: 0; font-size: 22px; font-weight: 900; color: var(--pk-dark); line-height: 1.2; }
+        
+        /* ★ 배틀뷰 미니 전광판 CSS */
         .battle-mini-hud { font-size: 14px; font-weight: bold; color: var(--pk-red); margin-top: 4px; display: flex; align-items: center; gap: 8px; }
         
         .gym-score-panel { background: #fffcf0; border: 2px solid var(--pk-yellow); border-radius: 12px; padding: 10px; box-shadow: inset 0 2px 5px rgba(0,0,0,0.05); overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
@@ -136,7 +138,6 @@
         <div id="battleView" class="battle-view">
             <div class="battle-header">
                 <div class="battle-title-row">
-                    <!-- [★ 배틀뷰 전광판] 미니 타이머와 총점 추가 -->
                     <div class="battle-title-wrap">
                         <h2 class="battle-title">🏟️ <span id="battleGymName">체육관</span></h2>
                         <div class="battle-mini-hud">⏱️ <span id="battleHudTimer">00:00</span> &nbsp;|&nbsp; 🏆 <span id="battleHudScore">0점</span></div>
@@ -207,7 +208,7 @@
         let myTeamName = null; let currentTargetGym = null; let currentDBQuestions = []; let activeGymsFromDB = [];
         let currentQIndex = -1; let currentCardEl = null; let activeReqRef = null; 
         
-        let lastClassReset = 0; let lastRoundReset = 0; 
+        let lastClassReset = 0; let lastRoundReset = 0; let chalTimer = null;
         let currentGlobalStatus = 'setup';
 
         const pinPositions = [ { top: '18%', left: '20%' }, { top: '35%', left: '60%' }, { top: '50%', left: '15%' }, { top: '65%', left: '75%' }, { top: '10%', left: '80%' }, { top: '80%', left: '35%' }, { top: '75%', left: '15%' } ];
@@ -215,13 +216,12 @@
 
         function getScoreStr(pts) { return pts > 0 ? "+" + pts : pts; }
 
-        // [★ 시계 동기화] 파이어베이스에서 실시간으로 깎이는 시간(timeLeft)을 받아와 모든 화면(HUD 및 배틀뷰)에 동시 출력
         function updateHudTime(seconds) {
             let m = Math.floor(seconds / 60).toString().padStart(2, '0');
             let s = (seconds % 60).toString().padStart(2, '0');
             const timeStr = `${m}:${s}`;
             document.getElementById('hudTimer').innerText = timeStr;
-            document.getElementById('battleHudTimer').innerText = timeStr; // 배틀뷰 미니 시계 갱신
+            document.getElementById('battleHudTimer').innerText = timeStr;
         }
 
         function getGymTarget(gymData) {
@@ -285,15 +285,11 @@
                 }
             }
 
-            // [★ 시계 동기화] 마스터에서 내려주는 timeLeft를 그대로 받아서 뿌림 (학생 기기 개별 타이머 삭제)
-            if(config.timeLeft !== undefined) {
-                updateHudTime(config.timeLeft);
-            }
-
             if(config.status === 'stop') {
+                clearInterval(chalTimer); updateHudTime(0); 
                 if(document.getElementById('loginScreen').classList.contains('hidden')) { document.getElementById('modalRoundOver').classList.add('open'); }
             } else if(config.status === 'setup') {
-                document.getElementById('modalRoundOver').classList.remove('open');
+                clearInterval(chalTimer); updateHudTime(config.timeLimitMin * 60); document.getElementById('modalRoundOver').classList.remove('open');
             }
 
             if(config.maxSolvePerGym) {
@@ -302,8 +298,21 @@
                 recalcTotalPossible();
             }
 
+            // ★ 타이머 동기화 로직 원상 복구 및 정확도 상승: 마스터 서버의 남은 시간을 1초마다 내 기기에서 직접 계산 (오차 0초)
             if(config.status === 'start') {
                 document.getElementById('modalRoundOver').classList.remove('open'); 
+                clearInterval(chalTimer);
+                
+                let elapsedSec = Math.floor((Date.now() - config.startTimestamp) / 1000); 
+                let cTime = config.timeLeft - elapsedSec; 
+                if(cTime < 0) cTime = 0;
+                
+                updateHudTime(cTime); 
+                
+                chalTimer = setInterval(() => { 
+                    if(cTime > 0) { cTime--; updateHudTime(cTime); } 
+                    else { clearInterval(chalTimer); } 
+                }, 1000);
             } 
         });
 
@@ -376,9 +385,8 @@
         }
 
         function updateMapHUD() {
-            // [★ 배틀뷰 전광판] 맵 점수 업데이트 시 배틀 화면 상단 미니 전광판의 점수도 함께 갱신
             document.getElementById('mapScore').innerText = `${worldState.totalScore}점`;
-            document.getElementById('battleHudScore').innerText = `${worldState.totalScore}점`;
+            document.getElementById('battleHudScore').innerText = `${worldState.totalScore}점`; // 전광판 동기화
             
             const countEl = document.getElementById('mapSolveCount');
             if(isTimeAttack) { countEl.innerText = `(${worldState.solvedCount}/🚀)`; countEl.classList.add('time-attack'); } 
